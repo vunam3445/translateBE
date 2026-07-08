@@ -44,44 +44,66 @@ public class SentenceAlignmentService {
         List<String> viSentences = splitToSentences(viText);
         List<String> enSentences = splitToSentences(enText);
 
-        int viSize = viSentences.size();
-        int enSize = enSentences.size();
+        // 1. Phân tách câu chứa chữ thực tế
+        List<String> viTextSentences = new ArrayList<>();
+        for (String s : viSentences) {
+            if (!isPunctuationOnly(s)) {
+                viTextSentences.add(s);
+            }
+        }
 
-        if (viSize == enSize) {
-            for (int i = 0; i < viSize; i++) {
-                alignedPairs.add(new AlignedPair(viSentences.get(i), enSentences.get(i)));
+        List<String> enTextSentences = new ArrayList<>();
+        for (String s : enSentences) {
+            if (!isPunctuationOnly(s)) {
+                enTextSentences.add(s);
             }
-        } else if (viSize > enSize) {
-            // Nhiều câu tiếng Việt hơn tiếng Anh. Gộp các câu tiếng Việt thừa vào câu cuối.
-            for (int i = 0; i < enSize - 1; i++) {
-                alignedPairs.add(new AlignedPair(viSentences.get(i), enSentences.get(i)));
+        }
+
+        // 2. Gióng hàng 1-1 cho các câu chứa chữ
+        List<String> alignedEnForVi = new ArrayList<>();
+        int viTextSize = viTextSentences.size();
+        int enTextSize = enTextSentences.size();
+
+        for (int i = 0; i < viTextSize; i++) {
+            if (i < enTextSize) {
+                alignedEnForVi.add(enTextSentences.get(i));
+            } else {
+                alignedEnForVi.add("");
             }
-            // Gộp phần còn lại của tiếng Việt
-            StringBuilder lastVi = new StringBuilder();
-            for (int i = enSize - 1; i < viSize; i++) {
-                if (lastVi.length() > 0) {
-                    lastVi.append(" ");
+        }
+
+        // Nếu tiếng Anh nhiều hơn tiếng Việt, gộp phần thừa vào câu chứa chữ cuối cùng của tiếng Việt
+        if (enTextSize > viTextSize && viTextSize > 0) {
+            StringBuilder lastEn = new StringBuilder(alignedEnForVi.get(viTextSize - 1));
+            for (int i = viTextSize; i < enTextSize; i++) {
+                lastEn.append(" ").append(enTextSentences.get(i));
+            }
+            alignedEnForVi.set(viTextSize - 1, lastEn.toString());
+        }
+
+        // 3. Tái dựng kết quả cuối cùng dựa trên danh sách viSentences gốc
+        int textIndex = 0;
+        for (String viSent : viSentences) {
+            if (isPunctuationOnly(viSent)) {
+                // Nếu là câu chỉ chứa dấu câu, gán luôn bằng chính câu gốc
+                alignedPairs.add(new AlignedPair(viSent, viSent));
+            } else {
+                // Nếu là câu chứa chữ, lấy câu tiếng Anh tương ứng từ kết quả gióng hàng
+                if (textIndex < alignedEnForVi.size()) {
+                    alignedPairs.add(new AlignedPair(viSent, alignedEnForVi.get(textIndex)));
+                    textIndex++;
+                } else {
+                    alignedPairs.add(new AlignedPair(viSent, ""));
                 }
-                lastVi.append(viSentences.get(i));
             }
-            alignedPairs.add(new AlignedPair(lastVi.toString(), enSentences.get(enSize - 1)));
-        } else {
-            // Nhiều câu tiếng Anh hơn tiếng Việt. Gộp các câu tiếng Anh thừa vào câu cuối.
-            for (int i = 0; i < viSize - 1; i++) {
-                alignedPairs.add(new AlignedPair(viSentences.get(i), enSentences.get(i)));
-            }
-            // Gộp phần còn lại của tiếng Anh
-            StringBuilder lastEn = new StringBuilder();
-            for (int i = viSize - 1; i < enSize; i++) {
-                if (lastEn.length() > 0) {
-                    lastEn.append(" ");
-                }
-                lastEn.append(enSentences.get(i));
-            }
-            alignedPairs.add(new AlignedPair(viSentences.get(viSize - 1), lastEn.toString()));
         }
 
         return alignedPairs;
+    }
+
+    private boolean isPunctuationOnly(String text) {
+        if (text == null) return true;
+        return !text.matches(".*[a-zA-Z\\p{L}\\d].*");
     }
 
     private List<String> splitToSentences(String text) {
