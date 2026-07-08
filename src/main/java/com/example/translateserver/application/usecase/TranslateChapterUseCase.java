@@ -127,11 +127,8 @@ public class TranslateChapterUseCase {
         chapter.setTranslationProgress(60);
         chapterRepository.save(chapter);
 
-        // Bước 4: Xóa các câu phân tích cũ của chương này nếu có để ghi đè
-        analyzedSentenceRepository.deleteByChapterId(chapter.getId());
-
-        // Bước 5: Gióng hàng câu (Sentence Alignment)
-        List<SentenceAlignmentService.AlignedPair> alignedPairs = 
+        // Bước 4: Gióng hàng câu (Sentence Alignment) - thực hiện TRƯỚC khi xóa dữ liệu cũ
+        List<SentenceAlignmentService.AlignedPair> alignedPairs =
                 sentenceAlignmentService.alignSentences(rawContent, fullTranslatedContent);
 
         log.info("Sau khi gióng hàng, tìm thấy {} cặp câu.", alignedPairs.size());
@@ -139,11 +136,16 @@ public class TranslateChapterUseCase {
         chapterRepository.save(chapter);
 
         if (alignedPairs.isEmpty()) {
-            chapter.setStatus(ChapterStatus.COMPLETED);
-            chapter.setTranslationProgress(100);
+            // Không xóa dữ liệu cũ nếu alignment thất bại - bảo toàn dữ liệu hiện có
+            log.warn("Alignment trả về rỗng cho chương {}. Giữ nguyên dữ liệu cũ.", chapter.getId());
+            chapter.setStatus(ChapterStatus.FAILED);
+            chapter.setTranslationProgress(0);
             chapterRepository.save(chapter);
             return;
         }
+
+        // Bước 5: Chỉ xóa dữ liệu cũ SAU KHI đã có dữ liệu mới
+        analyzedSentenceRepository.deleteByChapterId(chapter.getId());
 
         // Bước 6: Không gọi Gemini để phân tích cú pháp (tránh rate limit), lưu các cặp câu trực tiếp vào DB
         List<AnalyzedSentence> sentencesToSave = new ArrayList<>();
