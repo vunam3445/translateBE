@@ -106,10 +106,10 @@ public class SentenceAlignmentService {
         return !text.matches(".*[a-zA-Z\\p{L}\\d].*");
     }
 
-    private List<String> splitToSentences(String text) {
+    List<String> splitToSentences(String text) {
         List<String> sentences = new ArrayList<>();
         // Tách câu bằng dấu chấm, hỏi, than và khoảng trắng theo sau
-        String[] split = text.split("(?<=[.!?])\\s+");
+        String[] split = text.split("(?<= [.!?])\\s+");
         for (String s : split) {
             String trimmed = s.trim();
             if (!trimmed.isEmpty()) {
