@@ -8,8 +8,11 @@ import com.example.translateserver.domain.repository.AnalyzedSentenceRepository;
 import com.example.translateserver.domain.repository.ChapterRepository;
 import com.example.translateserver.domain.repository.StoryGlossaryRepository;
 import com.example.translateserver.domain.service.SentenceAlignmentService;
+import com.example.translateserver.domain.service.SentenceTenseAnalyzer;
 import com.example.translateserver.domain.service.TextChunkingService;
 import com.example.translateserver.domain.service.TranslationService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,9 @@ public class TranslateChapterUseCase {
     private final TextChunkingService textChunkingService;
     private final SentenceAlignmentService sentenceAlignmentService;
     private final TranslationService translationService;
+    private final SentenceTenseAnalyzer sentenceTenseAnalyzer;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Bộ nhớ tạm theo dõi các chương đang được dịch thực tế trong JVM
     private final Set<Long> activeTranslations = ConcurrentHashMap.newKeySet();
@@ -153,13 +159,25 @@ public class TranslateChapterUseCase {
         int totalPairs = alignedPairs.size();
 
         for (SentenceAlignmentService.AlignedPair pair : alignedPairs) {
+            // Phân tích thì bằng OpenNLP (offline, nhanh, không giới hạn API)
+            String tense = "Unknown";
+            String wordsJson = "";
+            try {
+                String analysisJson = sentenceTenseAnalyzer.analyzeSentence(pair.getEnSentence());
+                JsonNode analysisNode = objectMapper.readTree(analysisJson);
+                tense = analysisNode.path("tense").asText("Unknown");
+                wordsJson = analysisJson;
+            } catch (Exception ex) {
+                log.warn("Không thể phân tích thì cho câu #{}: {}", pairIndex, ex.getMessage());
+            }
+
             AnalyzedSentence sentence = AnalyzedSentence.builder()
                     .chapterId(chapter.getId())
                     .sentenceOrder(pairIndex)
                     .viText(pair.getViSentence())
                     .enText(pair.getEnSentence())
-                    .tense("Unknown")
-                    .wordsJsonMeta("")
+                    .tense(tense)
+                    .wordsJsonMeta(wordsJson)
                     .build();
 
             sentencesToSave.add(sentence);

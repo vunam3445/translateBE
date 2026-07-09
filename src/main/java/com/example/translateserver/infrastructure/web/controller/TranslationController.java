@@ -7,6 +7,8 @@ import com.example.translateserver.application.usecase.GetGlossaryMismatchesUseC
 import com.example.translateserver.application.usecase.UpdateSentenceUseCase;
 import com.example.translateserver.domain.model.Chapter;
 import com.example.translateserver.domain.repository.ChapterRepository;
+import com.example.translateserver.domain.service.SentenceTenseAnalyzer;
+import com.example.translateserver.infrastructure.web.dto.AnalyzeTenseRequest;
 import com.example.translateserver.infrastructure.web.dto.PhraseTranslateRequest;
 import com.example.translateserver.infrastructure.web.dto.PhraseTranslationResponse;
 import com.example.translateserver.infrastructure.web.dto.SentenceResponse;
@@ -37,6 +39,7 @@ public class TranslationController {
     private final GetGlossaryMismatchesUseCase getGlossaryMismatchesUseCase;
     private final UpdateSentenceUseCase updateSentenceUseCase;
     private final ChapterRepository chapterRepository;
+    private final SentenceTenseAnalyzer sentenceTenseAnalyzer;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostMapping("/stories/{storyId}/chapters/{chapterId}/translate")
@@ -139,5 +142,23 @@ public class TranslationController {
             @RequestBody @Valid UpdateSentenceRequest request) {
         updateSentenceUseCase.execute(chapterId, sentenceId, request.getEnText());
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Phân tích thì (Tense) của một câu tiếng Anh đơn lẻ sử dụng Apache OpenNLP (offline).
+     * Trả về JSON đầy đủ: tên thì (EN/VI), cấu trúc, dấu hiệu nhận biết, giải thích lý do, danh sách từ vựng.
+     *
+     * POST /api/v1/translate/analyze-tense
+     * Body: { "sentence": "She has been working here for years." }
+     */
+    @PostMapping("/translate/analyze-tense")
+    public ResponseEntity<String> analyzeTense(
+            @Valid @RequestBody AnalyzeTenseRequest request) {
+
+        log.info("Yêu cầu phân tích thì cho câu: '{}'", request.getSentence());
+        String rawJson = sentenceTenseAnalyzer.analyzeSentence(request.getSentence());
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(rawJson);
     }
 }
